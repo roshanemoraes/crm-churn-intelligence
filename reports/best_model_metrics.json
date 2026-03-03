@@ -1,10 +1,10 @@
 {
     "model": "lightgbm",
-    "accuracy": 0.7679,
-    "precision": 0.5469,
-    "recall": 0.7326,
-    "f1_score": 0.6263,
-    "roc_auc": 0.8343,
+    "accuracy": 0.7665,
+    "precision": 0.544,
+    "recall": 0.7433,
+    "f1_score": 0.6282,
+    "roc_auc": 0.8337,
     "best_threshold": 0.57,
-    "f1_tuned": 0.6335
+    "f1_tuned": 0.637
 }

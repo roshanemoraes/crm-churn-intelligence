@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -60,6 +61,19 @@ def apply_manual_encoding(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def drop_correlated_features(df: pd.DataFrame, threshold: float = 0.90) -> pd.DataFrame:
+    """
+    Drop one column from each pair whose absolute Pearson correlation exceeds
+    the threshold. Upper triangle only to avoid duplicate pairs.
+    """
+    corr = df.corr().abs()
+    upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+    to_drop = [col for col in upper.columns if any(upper[col] > threshold)]
+    if to_drop:
+        print(f"Dropping {len(to_drop)} correlated feature(s): {to_drop}")
+    return df.drop(columns=to_drop)
+
+
 def map_target(df: pd.DataFrame) -> pd.DataFrame:
     df["Churn"] = df["Churn"].map({"Yes": 1, "No": 0})
     return df
@@ -88,8 +102,9 @@ def prepare_training_data(df: pd.DataFrame):
       3. Map target (Yes/No → 1/0)
       4. Drop customerID
       5. Manual encoding (binary / ordinal / OHE)
-      6. Stratified train/test split
-      7. Build simple preprocessor
+      6. Drop highly correlated features (threshold=0.90)
+      7. Stratified train/test split
+      8. Build simple preprocessor
     """
     df = fix_total_charges(df)
     df = apply_feature_engineering(df)
@@ -98,6 +113,7 @@ def prepare_training_data(df: pd.DataFrame):
     df = apply_manual_encoding(df)
 
     X = df.drop("Churn", axis=1)
+    X = drop_correlated_features(X)
     y = df["Churn"]
 
     X_train, X_test, y_train, y_test = split_data(X, y)

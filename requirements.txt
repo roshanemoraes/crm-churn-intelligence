@@ -7,3 +7,9 @@ lightgbm
 imbalanced-learn
 seaborn
 shap
+xgboost
+fastapi
+uvicorn[standard]
+aiofiles
+boto3
+python-dotenv

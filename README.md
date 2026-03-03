@@ -370,6 +370,86 @@ curl -X POST http://<EC2-PUBLIC-IP>:8000/predict \
 
 ---
 
+## Continuous Deployment
+
+Every push to `main` automatically deploys to EC2 via GitHub Actions. The workflow is at
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml).
+
+### Step 1 — One-time EC2 setup: replace tmux with systemd
+
+tmux sessions don't survive reboots and can't be restarted from a script. A systemd service
+handles both. Run this once on the EC2 instance:
+
+```bash
+# Stop the existing tmux session
+tmux kill-session -t api 2>/dev/null || true
+
+# Create the systemd service
+sudo tee /etc/systemd/system/crm-api.service > /dev/null <<EOF
+[Unit]
+Description=CRM Churn Intelligence API
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/crm-churn-intelligence
+EnvironmentFile=/home/ubuntu/crm-churn-intelligence/.env
+ExecStart=/home/ubuntu/crm-churn-intelligence/.venv/bin/uvicorn api.app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable crm-api
+sudo systemctl start crm-api
+sudo systemctl status crm-api
+```
+
+The service reads `S3_BUCKET_NAME` and `AWS_REGION` from the `.env` file on the instance.
+
+### Step 2 — Add GitHub Secrets
+
+Go to: GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+
+| Secret name | Value |
+|---|---|
+| `EC2_HOST` | EC2 public IP (e.g. `13.235.xx.xx`) |
+| `EC2_USER` | `ubuntu` |
+| `EC2_SSH_KEY` | Full content of the `.pem` private key file |
+
+### Step 3 — Push to trigger a deploy
+
+```bash
+git push origin main
+```
+
+Go to **GitHub → Actions** tab to watch the workflow run. On success it prints
+`systemctl status crm-api` as confirmation.
+
+**What the workflow does on each push:**
+
+1. SSHs into EC2 using the stored key
+2. `git pull origin main` — fetches latest code
+3. `pip install -r requirements.txt` — picks up any new packages
+4. `sudo systemctl restart crm-api` — restarts uvicorn; model reloads from S3
+5. Logs `systemctl status` output
+
+Total deploy time: ~15–30 seconds.
+
+**Useful systemd commands:**
+
+| Command | Action |
+|---|---|
+| `sudo systemctl status crm-api` | Check if the service is running |
+| `sudo systemctl restart crm-api` | Restart the server manually |
+| `sudo systemctl stop crm-api` | Stop the server |
+| `sudo journalctl -u crm-api -f` | Stream live logs |
+
+---
+
 ## Scaling, Retraining & Monitoring
 
 ### Scaling to 100k+ records
